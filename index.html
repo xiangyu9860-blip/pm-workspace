@@ -335,18 +335,22 @@
             <span id="learnBadgeCount">0</span>次进化
           </span>
         </h2>
-        <p>输入你要做的工作，AI 自动拆解为可执行任务</p>
+        <p>输入工作内容，选择 AI 拆解或直接添加到任务板</p>
         <div class="applied-tip hidden" id="appliedTip"></div>
       </div>
       <div class="ai-body">
         <textarea class="ai-textarea" id="aiInput" placeholder="例如：完成用户增长V2版本的需求分析和评审&#10;或者：设计新版数据看板的原型&#10;或者：做一次核心竞品的功能对比分析"></textarea>
-        <div class="ai-hint">提示：描述越具体，拆解越精准。支持需求分析、原型设计、数据分析、竞品分析、上线发布等场景。</div>
+        <div class="ai-hint">「AI 拆解」自动拆为子任务 ·「直接添加」作为单条任务录入 · 描述越具体拆解越精准</div>
         <div class="ai-btn-row">
           <button class="btn btn-primary" onclick="runDecompose()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             AI 拆解
           </button>
-          <button class="btn btn-ghost" onclick="document.getElementById('aiInput').value=''">清空</button>
+          <button class="btn btn-outline" onclick="directAddToBoard()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            直接添加
+          </button>
+          <button class="btn btn-ghost" style="flex:0 0 auto" onclick="document.getElementById('aiInput').value=''">清空</button>
         </div>
         <div class="decompose-result hidden" id="decomposeResult">
           <h3>拆解结果 <span id="decomposeCount">0 项任务</span></h3>
@@ -1530,6 +1534,29 @@
         if(tip)tip.classList.add('hidden');
         loadData();
       }).catch(function(e){console.error('[decompose] add error:',e);showToast('部分任务添加失败：'+(e&&e.message?e.message:''),true)});
+    }
+
+    /* ===== Direct Add (no AI decompose) ===== */
+    function directAddToBoard(){
+      var input=document.getElementById('aiInput').value.trim();
+      if(!input){showToast('请先输入工作内容',true);return}
+      var d=new Date();d.setDate(d.getDate()+3);
+      var dStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      DataStore.addRecord({
+        '任务名称':{'text':input},
+        '任务描述':{'text':''},
+        '状态':{'select':selectVal('状态','待办')},
+        '优先级':{'select':selectVal('优先级','P2')},
+        '分类':{'select':selectVal('分类','其他')},
+        '截止日期':{'date':dStr},
+        '创建日期':{'date':todayStr()},
+        '来源':{'select':selectVal('来源','手动添加')}
+      }).then(function(){
+        document.getElementById('aiInput').value='';
+        document.getElementById('decomposeResult').classList.add('hidden');
+        showToast('已添加到任务板');
+        loadData();
+      }).catch(function(e){console.error('[directAdd] error:',e);showToast('添加失败：'+(e&&e.message?e.message:''),true)});
     }
 
     /* ===== Report ===== */
