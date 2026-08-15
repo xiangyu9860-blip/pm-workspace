@@ -171,11 +171,16 @@
     .modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:0 24px 24px}
 
     /* Report Modal */
-    .report-modal{max-width:640px}
-    .report-content{background:var(--gray-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;font-size:13px;line-height:1.85;color:var(--text);white-space:pre-wrap;font-family:var(--font);max-height:50vh;overflow-y:auto}
-    .report-tabs{display:flex;gap:6px;margin-bottom:14px}
-    .report-tab{padding:7px 18px;border-radius:var(--radius-xs);font-size:13px;font-weight:500;color:var(--text2);background:transparent;transition:all .2s ease}
+    .report-modal{max-width:680px}
+    .report-content{background:var(--gray-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px 20px;font-size:13px;line-height:1.85;color:var(--text);font-family:var(--font);max-height:50vh;overflow-y:auto;width:100%;border:1px solid var(--border);outline:none;resize:vertical;min-height:280px;transition:border-color .2s ease}
+    .report-content:focus{border-color:var(--primary);background:#fff}
+    .report-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .report-tabs{display:flex;gap:6px}
+    .report-tab{padding:7px 18px;border-radius:var(--radius-xs);font-size:13px;font-weight:500;color:var(--text2);background:transparent;transition:all .2s ease;cursor:pointer;border:none;font-family:var(--font)}
     .report-tab.active{background:var(--primary);color:#fff}
+    .report-tab:hover:not(.active){background:var(--gray-bg)}
+    .btn-regenerate{display:flex;align-items:center;gap:4px;padding:6px 14px;border-radius:var(--radius-xs);font-size:12px;font-weight:500;color:var(--text2);background:transparent;border:1px solid var(--border);transition:all .2s ease;cursor:pointer;font-family:var(--font)}
+    .btn-regenerate:hover{border-color:var(--primary);color:var(--primary);background:rgba(99,102,241,.04)}
 
     /* Confirm Dialog */
     .confirm-modal{max-width:380px}
@@ -421,14 +426,24 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="report-tabs">
-          <button class="report-tab active" id="tabDaily" onclick="switchReportTab('daily')">今日日报</button>
-          <button class="report-tab" id="tabWeekly" onclick="switchReportTab('weekly')">本周周报</button>
+        <div class="report-toolbar">
+          <div class="report-tabs">
+            <button class="report-tab active" id="tabDaily" onclick="switchReportTab('daily')">今日日报</button>
+            <button class="report-tab" id="tabWeekly" onclick="switchReportTab('weekly')">本周周报</button>
+          </div>
+          <button class="btn-regenerate" onclick="regenerateReport()" title="从任务数据重新生成报告">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            重新生成
+          </button>
         </div>
-        <div class="report-content" id="reportContent"></div>
+        <textarea class="report-content" id="reportContent" placeholder="点击「重新生成」从任务数据生成报告，或直接在此编辑..."></textarea>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeReportModal()">关闭</button>
+        <button class="btn btn-outline" onclick="downloadReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          下载
+        </button>
         <button class="btn btn-primary" onclick="copyReport()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-linecap="round" stroke-linejoin="round"/></svg>
           复制全文
@@ -1560,6 +1575,8 @@
     }
 
     /* ===== Report ===== */
+    var reportEdits={}; // 保存每种类型的手动编辑内容
+
     function generateReport(type){
       currentReportType=type;
       switchReportTab(type);
@@ -1567,10 +1584,27 @@
     }
 
     function switchReportTab(type){
+      // 保存当前编辑内容
+      var ta=document.getElementById('reportContent');
+      if(currentReportType&&ta.value){
+        reportEdits[currentReportType]=ta.value;
+      }
       currentReportType=type;
       document.getElementById('tabDaily').classList.toggle('active',type==='daily');
       document.getElementById('tabWeekly').classList.toggle('active',type==='weekly');
+      // 如果有已保存的编辑内容，用编辑内容；否则生成新报告
+      if(reportEdits[type]){
+        ta.value=reportEdits[type];
+      } else {
+        renderReport();
+      }
+    }
+
+    function regenerateReport(){
+      // 清除当前类型的编辑缓存，强制重新生成
+      delete reportEdits[currentReportType];
       renderReport();
+      showToast('已从任务数据重新生成');
     }
 
     function renderReport(){
@@ -1647,31 +1681,53 @@
       lines.push('- 待办任务 '+todo.length+' 项');
 
       currentReportText=lines.join('\n');
-      document.getElementById('reportContent').textContent=currentReportText;
+      document.getElementById('reportContent').value=currentReportText;
     }
 
     function closeReportModal(){
+      // 关闭前保存当前编辑
+      var ta=document.getElementById('reportContent');
+      if(currentReportType&&ta.value){
+        reportEdits[currentReportType]=ta.value;
+      }
       document.getElementById('reportModalOverlay').classList.remove('active');
     }
 
     function copyReport(){
-      if(!currentReportText)return;
+      var text=document.getElementById('reportContent').value;
+      if(!text){showToast('报告内容为空',true);return;}
       if(navigator.clipboard){
-        navigator.clipboard.writeText(currentReportText).then(function(){showToast('已复制到剪贴板')}).catch(function(){fallbackCopy()});
+        navigator.clipboard.writeText(text).then(function(){showToast('已复制到剪贴板')}).catch(function(){fallbackCopy(text)});
       } else {
-        fallbackCopy();
+        fallbackCopy(text);
       }
     }
 
-    function fallbackCopy(){
+    function fallbackCopy(text){
       var ta=document.createElement('textarea');
-      ta.value=currentReportText;
+      ta.value=text;
       ta.style.position='fixed';
       ta.style.opacity='0';
       document.body.appendChild(ta);
       ta.select();
       try{document.execCommand('copy');showToast('已复制到剪贴板')}catch(e){showToast('复制失败，请手动选择文本复制',true)}
       document.body.removeChild(ta);
+    }
+
+    function downloadReport(){
+      var text=document.getElementById('reportContent').value;
+      if(!text){showToast('报告内容为空',true);return;}
+      var type=currentReportType==='daily'?'日报':'周报';
+      var blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;
+      a.download='工作'+type+'_'+todayStr()+'.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已下载 '+type);
     }
 
     /* ===== Export / Import ===== */
