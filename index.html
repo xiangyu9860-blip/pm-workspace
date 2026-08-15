@@ -174,7 +174,10 @@
     .report-modal{max-width:680px}
     .report-content{background:var(--gray-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px 20px;font-size:13px;line-height:1.85;color:var(--text);font-family:var(--font);max-height:50vh;overflow-y:auto;width:100%;border:1px solid var(--border);outline:none;resize:vertical;min-height:280px;transition:border-color .2s ease}
     .report-content:focus{border-color:var(--primary);background:#fff}
-    .report-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .report-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+    .report-actions{display:flex;align-items:center;gap:8px}
+    .report-author{width:72px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:12px;font-family:var(--font);color:var(--text);outline:none;transition:border-color .2s ease;background:transparent}
+    .report-author:focus{border-color:var(--primary)}
     .report-tabs{display:flex;gap:6px}
     .report-tab{padding:7px 18px;border-radius:var(--radius-xs);font-size:13px;font-weight:500;color:var(--text2);background:transparent;transition:all .2s ease;cursor:pointer;border:none;font-family:var(--font)}
     .report-tab.active{background:var(--primary);color:#fff}
@@ -403,9 +406,13 @@
             <select id="fCategory"></select>
           </div>
           <div class="form-group">
-            <label>截止日期</label>
-            <input type="date" id="fDueDate">
+            <label>项目线</label>
+            <select id="fProjectLine"></select>
           </div>
+        </div>
+        <div class="form-group">
+          <label>截止日期</label>
+          <input type="date" id="fDueDate">
         </div>
       </div>
       <div class="modal-footer">
@@ -431,10 +438,13 @@
             <button class="report-tab active" id="tabDaily" onclick="switchReportTab('daily')">今日日报</button>
             <button class="report-tab" id="tabWeekly" onclick="switchReportTab('weekly')">本周周报</button>
           </div>
-          <button class="btn-regenerate" onclick="regenerateReport()" title="从任务数据重新生成报告">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            重新生成
-          </button>
+          <div class="report-actions">
+            <input type="text" id="reportAuthor" class="report-author" placeholder="姓名" value="" onchange="saveReportAuthor()" title="周报头部署名">
+            <button class="btn-regenerate" onclick="regenerateReport()" title="从任务数据重新生成报告">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              重新生成
+            </button>
+          </div>
         </div>
         <textarea class="report-content" id="reportContent" placeholder="点击「重新生成」从任务数据生成报告，或直接在此编辑..."></textarea>
       </div>
@@ -809,10 +819,35 @@
       document.getElementById('confirmOverlay').classList.add('active');
     }
 
+    /* 项目线配置：按业务模块归类，用于周报分组 */
+    var PROJECT_LINES=[
+      {name:'视频复刻',keywords:[{w:'视频复刻',s:4},{w:'复刻工具',s:3},{w:'工具开发',s:3},{w:'功能迭代',s:3},{w:'上线测试',s:3},{w:'工具',s:1},{w:'开发',s:1},{w:'迭代',s:2},{w:'上线',s:2},{w:'发布',s:2},{w:'修复',s:2},{w:'搭建',s:1},{w:'页面',s:1}]},
+      {name:'爆款复刻',keywords:[{w:'爆款',s:3},{w:'脚本生成',s:3},{w:'脚本优化',s:3},{w:'编导',s:3},{w:'文案',s:2},{w:'选题',s:2},{w:'素材',s:1},{w:'内容',s:1},{w:'拍摄',s:1},{w:'脚本',s:1},{w:'调研反馈',s:2}]},
+      {name:'AI工具/数字人调研',keywords:[{w:'调研',s:2},{w:'厂商',s:2},{w:'对接',s:2},{w:'商务',s:2},{w:'谈判',s:2},{w:'供应商',s:2},{w:'数字人',s:3},{w:'AI工具',s:3},{w:'试用',s:2},{w:'选型',s:2},{w:'招标',s:2},{w:'demo',s:2}]},
+      {name:'模型/方案测试',keywords:[{w:'模型',s:2},{w:'接入',s:2},{w:'对比',s:2},{w:'成本',s:2},{w:'评估',s:2},{w:'方案测试',s:3},{w:'效果对比',s:3},{w:'成本评估',s:3},{w:'maxDuration',s:4},{w:'时长',s:2},{w:'校验',s:2},{w:'测试',s:1},{w:'效果',s:1}]}
+    ];
+
+    var PROJECT_LINE_COLORS={'视频复刻':'#6366F1','爆款复刻':'#F43F5E','AI工具/数字人调研':'#0EA5E9','模型/方案测试':'#10B981','其他':'#94A3B8'};
+
+    function classifyProjectLine(text){
+      if(!text)return '其他';
+      var t=String(text).toLowerCase();
+      var best='其他',bestScore=0;
+      PROJECT_LINES.forEach(function(pl){
+        var sc=0;
+        pl.keywords.forEach(function(k){
+          if(t.indexOf(k.w)!==-1)sc+=k.s;
+        });
+        if(sc>bestScore){bestScore=sc;best=pl.name}
+      });
+      return best;
+    }
+
     var DEFAULT_OPTIONS = {
       '状态': [{'text':'待办'},{'text':'进行中'},{'text':'已完成'}],
       '优先级': [{'text':'P0'},{'text':'P1'},{'text':'P2'}],
       '分类': [{'text':'需求分析'},{'text':'原型设计'},{'text':'数据分析'},{'text':'项目协调'},{'text':'竞品分析'},{'text':'其他'}],
+      '项目线': [{'text':'视频复刻'},{'text':'爆款复刻'},{'text':'AI工具/数字人调研'},{'text':'模型/方案测试'},{'text':'其他'}],
       '来源': [{'text':'手动添加'},{'text':'AI拆解'}]
     };
 
@@ -855,11 +890,11 @@
       var tom=new Date();tom.setDate(tom.getDate()+2);
       var tomStr=tom.getFullYear()+'-'+String(tom.getMonth()+1).padStart(2,'0')+'-'+String(tom.getDate()).padStart(2,'0');
       return [
-        {_id:'s1','任务名称':'完成用户增长V2版本需求文档','任务描述':'梳理用户增长V2版本核心需求，输出完整PRD文档，包含用户故事和流程图','状态':'进行中','优先级':'P0','分类':'需求分析','截止日期':today,'创建日期':yestStr,'完成日期':null,'来源':'手动添加'},
-        {_id:'s2','任务名称':'竞品功能对比分析','任务描述':'对比3款核心竞品的功能差异，输出分析报告，找出差异化机会点','状态':'待办','优先级':'P1','分类':'竞品分析','截止日期':yestStr,'创建日期':yestStr,'完成日期':null,'来源':'手动添加'},
-        {_id:'s3','任务名称':'设计数据看板原型图','任务描述':'完成核心数据看板的原型设计，包含关键指标卡片和趋势图','状态':'待办','优先级':'P1','分类':'原型设计','截止日期':tomStr,'创建日期':today,'完成日期':null,'来源':'手动添加'},
-        {_id:'s4','任务名称':'周会同步项目进展','任务描述':'整理本周项目进度，在周会上同步给团队','状态':'已完成','优先级':'P2','分类':'项目协调','截止日期':today,'创建日期':yestStr,'完成日期':today,'来源':'手动添加'},
-        {_id:'s5','任务名称':'埋点数据验收','任务描述':'验证新版埋点方案的数据准确性，确认上报正常','状态':'已完成','优先级':'P0','分类':'数据分析','截止日期':yestStr,'创建日期':yestStr,'完成日期':yestStr,'来源':'手动添加'}
+        {_id:'s1','任务名称':'完成用户增长V2版本需求文档','任务描述':'梳理用户增长V2版本核心需求，输出完整PRD文档，包含用户故事和流程图','状态':'进行中','优先级':'P0','分类':'需求分析','项目线':'视频复刻','截止日期':today,'创建日期':yestStr,'完成日期':null,'来源':'手动添加'},
+        {_id:'s2','任务名称':'竞品功能对比分析','任务描述':'对比3款核心竞品的功能差异，输出分析报告，找出差异化机会点','状态':'待办','优先级':'P1','分类':'竞品分析','项目线':'AI工具/数字人调研','截止日期':yestStr,'创建日期':yestStr,'完成日期':null,'来源':'手动添加'},
+        {_id:'s3','任务名称':'设计数据看板原型图','任务描述':'完成核心数据看板的原型设计，包含关键指标卡片和趋势图','状态':'待办','优先级':'P1','分类':'原型设计','项目线':'其他','截止日期':tomStr,'创建日期':today,'完成日期':null,'来源':'手动添加'},
+        {_id:'s4','任务名称':'周会同步项目进展','任务描述':'整理本周项目进度，在周会上同步给团队','状态':'已完成','优先级':'P2','分类':'项目协调','项目线':'其他','截止日期':today,'创建日期':yestStr,'完成日期':today,'来源':'手动添加'},
+        {_id:'s5','任务名称':'埋点数据验收','任务描述':'验证新版埋点方案的数据准确性，确认上报正常','状态':'已完成','优先级':'P0','分类':'数据分析','项目线':'模型/方案测试','截止日期':yestStr,'创建日期':yestStr,'完成日期':yestStr,'来源':'手动添加'}
       ];
     }
 
@@ -1116,11 +1151,12 @@
         }
 
         var segDue=addDays(today,seg.offsetDays);
+        var segPl=classifyProjectLine(seg.text);
         tasks.forEach(function(t,idx){
           var dStr=formatDate(segDue);
           result.push({
             _oid:'dec_'+segIdx+'_'+idx+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
-            name:t.name,desc:seg.label?('【'+seg.label+'】'+seg.text):'',status:'待办',priority:t_pri(t.pri),category:t.cat,dueDate:dStr,
+            name:t.name,desc:seg.label?('【'+seg.label+'】'+seg.text):'',status:'待办',priority:t_pri(t.pri),category:t.cat,projectLine:segPl,dueDate:dStr,
             checked:true,editing:false
           });
         });
@@ -1300,6 +1336,7 @@
       if(isOverdue(t)){dueCls=' overdue';dueText+='(逾期)'}
       else if(isToday(t['截止日期'])){dueCls=' today';dueText='今天'}
       var catColor=CAT_COLORS[t['分类']]||'#64748B';
+      var plColor=PROJECT_LINE_COLORS[t['项目线']]||PROJECT_LINE_COLORS['其他'];
       var priCls='tag-p'+(t['优先级']||'2').charAt(1);
       var sourceIcon=t['来源']==='AI拆解'?ICO.bolt:ICO.user;
 
@@ -1319,6 +1356,7 @@
         +'<div class="task-tags">'
         +'<span class="tag-badge '+priCls+'">'+(t['优先级']||'P2')+'</span>'
         +'<span class="tag-badge tag-cat" style="background:'+catColor+'">'+(t['分类']||'其他')+'</span>'
+        +'<span class="tag-badge tag-pl" style="background:'+plColor+';opacity:.85">'+(t['项目线']||'其他')+'</span>'
         +(dueText?'<span class="tag-badge tag-due'+dueCls+'">'+ICO.clock+dueText+'</span>':'')
         +'</div>'
         +'<div class="task-footer">'
@@ -1357,6 +1395,7 @@
       fillSelect('fStatus','状态',task?task['状态']:defaultStatus||'待办');
       fillSelect('fPriority','优先级',task?task['优先级']:'P1');
       fillSelect('fCategory','分类',task?task['分类']:'其他');
+      fillSelect('fProjectLine','项目线',task?task['项目线']:classifyProjectLine(task?task['任务名称']:''));
       document.getElementById('fDueDate').value=task?fmtDate(task['截止日期']):todayStr();
       document.getElementById('btnDeleteTask').classList.toggle('hidden',!taskId);
       document.getElementById('taskModalOverlay').classList.add('active');
@@ -1375,6 +1414,7 @@
       var status=document.getElementById('fStatus').value;
       var priority=document.getElementById('fPriority').value;
       var category=document.getElementById('fCategory').value;
+      var projectLine=document.getElementById('fProjectLine').value;
       var dueDate=document.getElementById('fDueDate').value;
 
       var sourceText=editingTaskId?(allTasks.find(function(t){return t._id===editingTaskId})||{})['来源']||'手动添加':'手动添加';
@@ -1384,6 +1424,7 @@
         '状态':{'select':selectVal('状态',status)},
         '优先级':{'select':selectVal('优先级',priority)},
         '分类':{'select':selectVal('分类',category)},
+        '项目线':{'select':selectVal('项目线',projectLine)},
         '截止日期':{'date':dueDate},
         '来源':{'select':selectVal('来源',sourceText)}
       };
@@ -1483,6 +1524,7 @@
           +'<div class="decompose-item-meta">'
           +'<select onchange="decomposedTasks['+idx+'].priority=this.value">'+['P0','P1','P2'].map(function(p){return '<option value="'+p+'" '+(t.priority===p?'selected':'')+'>'+p+'</option>'}).join('')+'</select>'
           +'<select onchange="decomposedTasks['+idx+'].category=this.value">'+['需求分析','原型设计','数据分析','项目协调','竞品分析','其他'].map(function(c){return '<option value="'+c+'" '+(t.category===c?'selected':'')+'>'+c+'</option>'}).join('')+'</select>'
+          +'<select onchange="decomposedTasks['+idx+'].projectLine=this.value" title="项目线">'+['视频复刻','爆款复刻','AI工具/数字人调研','模型/方案测试','其他'].map(function(p){return '<option value="'+p+'" '+(t.projectLine===p?'selected':'')+'>'+p+'</option>'}).join('')+'</select>'
           +'<input type="date" value="'+t.dueDate+'" onchange="decomposedTasks['+idx+'].dueDate=this.value" style="font-size:11px;padding:1px 4px;border:1px solid var(--border);border-radius:3px">'
           +'</div>'
           +'</div>'
@@ -1500,7 +1542,7 @@
       var dStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       decomposedTasks.push({
         _oid:null,
-        name:'新任务',desc:'',status:'待办',priority:'P2',category:'其他',
+        name:'新任务',desc:'',status:'待办',priority:'P2',category:'其他',projectLine:'其他',
         dueDate:dStr,checked:true,editing:false
       });
       renderDecomposeList();
@@ -1535,6 +1577,7 @@
           '状态':{'select':selectVal('状态','待办')},
           '优先级':{'select':selectVal('优先级',t.priority)},
           '分类':{'select':selectVal('分类',t.category)},
+          '项目线':{'select':selectVal('项目线',t.projectLine||classifyProjectLine(t.name))},
           '截止日期':{'date':t.dueDate},
           '创建日期':{'date':todayStr()},
           '来源':{'select':selectVal('来源','AI拆解')}
@@ -1563,6 +1606,7 @@
         '状态':{'select':selectVal('状态','待办')},
         '优先级':{'select':selectVal('优先级','P2')},
         '分类':{'select':selectVal('分类','其他')},
+        '项目线':{'select':selectVal('项目线',classifyProjectLine(input))},
         '截止日期':{'date':dStr},
         '创建日期':{'date':todayStr()},
         '来源':{'select':selectVal('来源','手动添加')}
@@ -1576,6 +1620,7 @@
 
     /* ===== Report ===== */
     var reportEdits={}; // 保存每种类型的手动编辑内容
+    var CN_NUM=['零','一','二','三','四','五','六','七','八','九','十'];
 
     function generateReport(type){
       currentReportType=type;
@@ -1607,7 +1652,115 @@
       showToast('已从任务数据重新生成');
     }
 
+    function saveReportAuthor(){
+      localStorage.setItem('pmReportAuthor',document.getElementById('reportAuthor').value.trim());
+    }
+
+    function fmtDateMD(s){var d=parseDate(s);if(!d)return '';return (d.getMonth()+1)+'.'+d.getDate()}
+
+    /* 动作动词前缀：老板视角，技术动作→业务价值 */
+    var ACTION_VERBS=['完成','新增','上线','发布','优化','推进','组织','输出','梳理','设计','绘制','接入','测试','验证','修复','调研','评估','跟进','拉通','确定','整理','准备','主持','跟踪','明确','确认','监控','总结','验收','通过','搭建','开发','启动','撰写','制作','对比','分析','协调','推动','制定','打通','升级','迭代','调整','配置','打通'];
+    function ensureVerb(name,category){
+      var n=String(name||'').trim();
+      if(!n)return n;
+      var head=n.substring(0,4);
+      for(var i=0;i<ACTION_VERBS.length;i++){
+        if(head.indexOf(ACTION_VERBS[i])===0)return n;
+      }
+      var verbMap={'需求分析':'完成','原型设计':'完成','数据分析':'完成','上线发布':'上线','竞品分析':'完成','项目协调':'推进','技术接入':'完成','测试验收':'完成','会议协调':'组织','其他':'完成'};
+      return (verbMap[category]||'完成')+n;
+    }
+
+    /* 排除非本周执行类内容（Q2复盘、Q3规划等） */
+    function isExcludedReport(name){
+      return /复盘|规划|Q2|Q3|季度|半年度|年度|OKR/.test(String(name||''));
+    }
+
+    function isCarriedOver(t,monDate){
+      var cd=parseDate(t['创建日期']);
+      return cd&&cd<monDate;
+    }
+
+    function plOfTask(t){
+      return t['项目线']||classifyProjectLine(t['任务名称']);
+    }
+
+    /* 周报：按项目线分组 + 三段式（本周进展/关键结论·数据/下周计划） */
+    function buildWeeklyReport(){
+      var now=new Date();
+      var day=now.getDay()||7;
+      var mon=new Date(now);mon.setDate(now.getDate()-day+1);mon.setHours(0,0,0,0);
+      var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999);
+      var author=document.getElementById('reportAuthor').value.trim();
+
+      var completed=allTasks.filter(function(t){
+        return t['状态']==='已完成'&&isThisWeek(t['完成日期'])&&!isExcludedReport(t['任务名称']);
+      });
+      var inProgress=allTasks.filter(function(t){return t['状态']==='进行中'&&!isExcludedReport(t['任务名称'])});
+      var todo=allTasks.filter(function(t){return t['状态']==='待办'&&!isExcludedReport(t['任务名称'])});
+
+      var lines=[];
+      lines.push('【AI板块周报】'+(author?author+' | ':'')+fmtDateMD(mon.toISOString())+' - '+fmtDateMD(sun.toISOString()));
+      lines.push('');
+
+      var plNames=PROJECT_LINES.map(function(p){return p.name}).concat('其他');
+      var usedPl=[];
+      plNames.forEach(function(plName){
+        var done=completed.filter(function(t){return plOfTask(t)===plName});
+        var next=todo.concat(inProgress).filter(function(t){return plOfTask(t)===plName});
+        if(done.length===0&&next.length===0)return;
+        usedPl.push(plName);
+        lines.push(CN_NUM[usedPl.length]+'、'+plName);
+        // 本周进展：完成了什么（动词开头）
+        lines.push('【本周进展】');
+        if(done.length===0){
+          lines.push('  - 本周无完成项，项目线持续推进中');
+        } else {
+          done.forEach(function(t,i){
+            var carry=isCarriedOver(t,mon)?'（延续上周）':'';
+            lines.push('  '+(i+1)+'. '+ensureVerb(t['任务名称'],t['分类'])+' ['+(t['优先级']||'P2')+']'+carry);
+          });
+        }
+        // 关键结论/数据：测试结论、量化对比
+        var conclusions=done.filter(function(t){return t['任务描述']});
+        if(conclusions.length>0){
+          lines.push('【关键结论/数据】');
+          conclusions.forEach(function(t){
+            lines.push('  - '+t['任务描述']);
+          });
+        }
+        // 下周计划：下一步动作
+        lines.push('【下周计划】');
+        if(next.length===0){
+          lines.push('  - 暂无排期');
+        } else {
+          next.slice(0,8).forEach(function(t,i){
+            lines.push('  '+(i+1)+'. '+ensureVerb(t['任务名称'],t['分类'])+' ['+(t['优先级']||'P2')+']');
+          });
+          if(next.length>8)lines.push('  ...等共 '+next.length+' 项');
+        }
+        lines.push('');
+      });
+
+      if(usedPl.length===0){
+        lines.push('（本周暂无任务数据）');
+        lines.push('');
+      }
+
+      // 本周总结
+      lines.push('【本周总结】');
+      lines.push('- 本周完成 '+completed.length+' 项任务');
+      lines.push('- 进行中 '+inProgress.length+' 项，待办 '+todo.length+' 项');
+      return lines.join('\n');
+    }
+
     function renderReport(){
+      if(currentReportType==='weekly'){
+        currentReportText=buildWeeklyReport();
+        document.getElementById('reportContent').value=currentReportText;
+        return;
+      }
+
       var today=todayStr();
       var completed, title, period;
 
@@ -1762,6 +1915,7 @@
               '状态':{'select':selectVal('状态',t['状态']||'待办')},
               '优先级':{'select':selectVal('优先级',t['优先级']||'P2')},
               '分类':{'select':selectVal('分类',t['分类']||'其他')},
+              '项目线':{'select':selectVal('项目线',t['项目线']||classifyProjectLine(t['任务名称']))},
               '截止日期':{'date':fmtDate(t['截止日期'])||todayStr()},
               '创建日期':{'date':fmtDate(t['创建日期'])||todayStr()},
               '来源':{'select':selectVal('来源',t['来源']||'手动添加')}
@@ -1806,6 +1960,12 @@
     function init(){
       // Load learning data
       loadLearning();
+
+      // Restore report author name
+      var authorEl=document.getElementById('reportAuthor');
+      if(authorEl){
+        authorEl.value=localStorage.getItem('pmReportAuthor')||'';
+      }
 
       // Sync status
       var syncEl=document.getElementById('syncDot');
