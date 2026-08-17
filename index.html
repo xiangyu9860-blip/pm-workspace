@@ -883,6 +883,18 @@
       return text;
     }
 
+    /* 检查字段是否在数据库 schema 中存在（SDK 模式下用） */
+    function schemaHas(fieldName){
+      if(!hasSDK)return true; /* 本地模式始终允许 */
+      return !!(SCHEMA_OPTIONS[fieldName]||OPTIONS_MAP[fieldName]);
+    }
+
+    /* 构建安全的 select props：schema 不支持的字段跳过 */
+    function safeSelect(fieldName,text){
+      if(!schemaHas(fieldName))return undefined;
+      return {'select':selectVal(fieldName,text)};
+    }
+
     function getSampleData(){
       var today=todayStr();
       var yest=new Date();yest.setDate(yest.getDate()-1);
@@ -1420,14 +1432,14 @@
       var sourceText=editingTaskId?(allTasks.find(function(t){return t._id===editingTaskId})||{})['来源']||'手动添加':'手动添加';
       var props={
         '任务名称':{'text':name},
-        '任务描述':{'text':desc},
-        '状态':{'select':selectVal('状态',status)},
-        '优先级':{'select':selectVal('优先级',priority)},
-        '分类':{'select':selectVal('分类',category)},
-        '项目线':{'select':selectVal('项目线',projectLine)},
-        '截止日期':{'date':dueDate},
-        '来源':{'select':selectVal('来源',sourceText)}
+        '任务描述':{'text':desc}
       };
+      if(schemaHas('状态'))props['状态']={'select':selectVal('状态',status)};
+      if(schemaHas('优先级'))props['优先级']={'select':selectVal('优先级',priority)};
+      if(schemaHas('分类'))props['分类']={'select':selectVal('分类',category)};
+      if(schemaHas('项目线'))props['项目线']={'select':selectVal('项目线',projectLine)};
+      if(schemaHas('来源'))props['来源']={'select':selectVal('来源',sourceText)};
+      if(dueDate)props['截止日期']={'date':dueDate};
 
       if(status==='已完成'){
         if(!editingTaskId||(allTasks.find(function(t){return t._id===editingTaskId})||{})['状态']!=='已完成'){
@@ -1571,17 +1583,18 @@
       }
 
       var promises=checked.map(function(t){
-        return DataStore.addRecord({
+        var rec={
           '任务名称':{'text':t.name},
           '任务描述':{'text':''},
-          '状态':{'select':selectVal('状态','待办')},
-          '优先级':{'select':selectVal('优先级',t.priority)},
-          '分类':{'select':selectVal('分类',t.category)},
-          '项目线':{'select':selectVal('项目线',t.projectLine||classifyProjectLine(t.name))},
           '截止日期':{'date':t.dueDate},
-          '创建日期':{'date':todayStr()},
-          '来源':{'select':selectVal('来源','AI拆解')}
-        });
+          '创建日期':{'date':todayStr()}
+        };
+        if(schemaHas('状态'))rec['状态']={'select':selectVal('状态','待办')};
+        if(schemaHas('优先级'))rec['优先级']={'select':selectVal('优先级',t.priority)};
+        if(schemaHas('分类'))rec['分类']={'select':selectVal('分类',t.category)};
+        if(schemaHas('项目线'))rec['项目线']={'select':selectVal('项目线',t.projectLine||classifyProjectLine(t.name))};
+        if(schemaHas('来源'))rec['来源']={'select':selectVal('来源','AI拆解')};
+        return DataStore.addRecord(rec);
       });
       Promise.all(promises).then(function(){
         decomposedTasks=[];
@@ -1600,17 +1613,18 @@
       if(!input){showToast('请先输入工作内容',true);return}
       var d=new Date();d.setDate(d.getDate()+3);
       var dStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-      DataStore.addRecord({
+      var rec={
         '任务名称':{'text':input},
         '任务描述':{'text':''},
-        '状态':{'select':selectVal('状态','待办')},
-        '优先级':{'select':selectVal('优先级','P2')},
-        '分类':{'select':selectVal('分类','其他')},
-        '项目线':{'select':selectVal('项目线',classifyProjectLine(input))},
         '截止日期':{'date':dStr},
-        '创建日期':{'date':todayStr()},
-        '来源':{'select':selectVal('来源','手动添加')}
-      }).then(function(){
+        '创建日期':{'date':todayStr()}
+      };
+      if(schemaHas('状态'))rec['状态']={'select':selectVal('状态','待办')};
+      if(schemaHas('优先级'))rec['优先级']={'select':selectVal('优先级','P2')};
+      if(schemaHas('分类'))rec['分类']={'select':selectVal('分类','其他')};
+      if(schemaHas('项目线'))rec['项目线']={'select':selectVal('项目线',classifyProjectLine(input))};
+      if(schemaHas('来源'))rec['来源']={'select':selectVal('来源','手动添加')};
+      DataStore.addRecord(rec).then(function(){
         document.getElementById('aiInput').value='';
         document.getElementById('decomposeResult').classList.add('hidden');
         showToast('已添加到任务板');
@@ -1912,14 +1926,14 @@
             var importProps={
               '任务名称':{'text':t['任务名称']||''},
               '任务描述':{'text':t['任务描述']||''},
-              '状态':{'select':selectVal('状态',t['状态']||'待办')},
-              '优先级':{'select':selectVal('优先级',t['优先级']||'P2')},
-              '分类':{'select':selectVal('分类',t['分类']||'其他')},
-              '项目线':{'select':selectVal('项目线',t['项目线']||classifyProjectLine(t['任务名称']))},
               '截止日期':{'date':fmtDate(t['截止日期'])||todayStr()},
-              '创建日期':{'date':fmtDate(t['创建日期'])||todayStr()},
-              '来源':{'select':selectVal('来源',t['来源']||'手动添加')}
+              '创建日期':{'date':fmtDate(t['创建日期'])||todayStr()}
             };
+            if(schemaHas('状态'))importProps['状态']={'select':selectVal('状态',t['状态']||'待办')};
+            if(schemaHas('优先级'))importProps['优先级']={'select':selectVal('优先级',t['优先级']||'P2')};
+            if(schemaHas('分类'))importProps['分类']={'select':selectVal('分类',t['分类']||'其他')};
+            if(schemaHas('项目线'))importProps['项目线']={'select':selectVal('项目线',t['项目线']||classifyProjectLine(t['任务名称']))};
+            if(schemaHas('来源'))importProps['来源']={'select':selectVal('来源',t['来源']||'手动添加')};
             var compDate=fmtDate(t['完成日期']);
             if(compDate){importProps['完成日期']={'date':compDate}}
             return DataStore.addRecord(importProps);
